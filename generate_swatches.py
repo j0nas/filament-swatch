@@ -23,11 +23,25 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-BAMBU_STUDIO = Path(r"C:\Program Files\Bambu Studio\bambu-studio.exe")
+BAMBU_STUDIO_SEARCH_PATHS = [
+    # Windows
+    Path(r"C:\Program Files\Bambu Studio\bambu-studio.exe"),
+    # macOS
+    Path("/Applications/BambuStudio.app/Contents/MacOS/BambuStudio"),
+    # Linux (flatpak & common)
+    Path.home() / ".local/share/flatpak/exports/bin/com.bambulab.BambuStudio",
+    Path("/usr/bin/bambu-studio"),
+]
 
 OPENSCAD_SEARCH_PATHS = [
+    # Windows
     Path(r"C:\Program Files\OpenSCAD\openscad.exe"),
     Path(r"C:\Program Files (x86)\OpenSCAD\openscad.exe"),
+    # macOS
+    Path("/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD"),
+    # Linux
+    Path("/usr/bin/openscad"),
+    Path("/usr/local/bin/openscad"),
 ]
 
 # ── Color mapping ──────────────────────────────────────────────────────────
@@ -274,6 +288,16 @@ def find_openscad(override: str | None = None) -> Path:
     raise FileNotFoundError(
         "OpenSCAD not found. Install with: winget install OpenSCAD.OpenSCAD"
     )
+
+
+def find_bambu_studio() -> Path | None:
+    found = shutil.which("bambu-studio") or shutil.which("BambuStudio")
+    if found:
+        return Path(found)
+    for p in BAMBU_STUDIO_SEARCH_PATHS:
+        if p.is_file():
+            return p
+    return None
 
 
 def compute_font_size(text: str, default_size: float, max_width: float = 48.0) -> float:
@@ -714,7 +738,11 @@ def main():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
     # Open in Bambu Studio
-    subprocess.Popen([BAMBU_STUDIO, str(output_path)])
+    bambu = find_bambu_studio()
+    if bambu:
+        subprocess.Popen([str(bambu), str(output_path)])
+    else:
+        print("\nBambu Studio not found — open the 3MF file manually.")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 Generate multi-color filament sample swatches as ready-to-print Bambu Studio 3MF projects.
 
-![swatch](https://github.com/user-attachments/assets/placeholder.png)
+![swatches](swatches.JPG)
 
 ## Usage
 
@@ -17,6 +17,10 @@ The script renders the geometry via OpenSCAD, assembles a multi-part 3MF with co
 ## Swatch design
 
 100x36x2mm rounded rectangle. Left half has thickness-test cutouts (0.2--1.8mm). Right half has producer/type/color text. Text color is automatically black or white based on body brightness.
+
+## Tip
+
+The easiest way to use this is through [Claude Code](https://claude.ai/claude-code) -- just tell it what filaments you want swatches for and it handles the rest.
 
 ## Requirements
 
