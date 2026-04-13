@@ -724,6 +724,10 @@ def main():
         output_name = f"Swatches_{datetime.now():%Y%m%d_%H%M%S}.3mf"
     output_path = SCRIPT_DIR / output_name
 
+    # Clean up previous generated 3MFs
+    for old in SCRIPT_DIR.glob("Swatches_*.3mf"):
+        old.unlink()
+
     tmpdir = Path(tempfile.mkdtemp(prefix="swatches_"))
 
     # Write body .scad once (same for every swatch)
