@@ -84,6 +84,7 @@ COLOR_MAP = {
     "bronze":       "#CD7F32",
     "burgundy":     "#6B1D2A",
     "charcoal":     "#333333",
+    "aurora green":  "#2E8B57",
     "dark green":   "#1B5E20",
     "dark blue":    "#1A237E",
     "dark red":     "#8B0000",
@@ -257,7 +258,7 @@ difference() {
     rectangle_cutout([10, 10, 0.6], [34.5, 23, 1.4]);
     rectangle_cutout([10, 10, 0.4], [34.5, 13, 1.6]);
     rectangle_cutout([10, 10, 0.2], [34.5, 3, 1.8]);
-    rectangle_cutout([50, 30, 0.2], [46.5, 3, 1.8]);
+    rectangle_cutout([50, 30, 0.4], [46.5, 3, 1.6]);
 }
 '''
 
@@ -265,9 +266,9 @@ def _text_scad(producer: str, filament_type: str, color: str,
                sz1: float, sz2: float, sz3: float) -> str:
     return SCAD_MODULES + f'''
 union() {{
-    extruded_text("{producer}", {sz1}, 0.2, [46.5, 29, 1.8], "Arial:style=Bold");
-    extruded_text("{filament_type}", {sz2}, 0.2, [46.25, 18, 1.8], "Arial:style=Bold");
-    extruded_text("{color}", {sz3}, 0.2, [46.5, 8, 1.8], "Arial:style=Bold");
+    extruded_text("{producer}", {sz1}, 0.8, [48.5, 28, 1.2], "Arial:style=Bold");
+    extruded_text("{filament_type}", {sz2}, 0.8, [48.5, 18, 1.2], "Arial:style=Bold");
+    extruded_text("{color}", {sz3}, 0.8, [48.5, 8, 1.2], "Arial:style=Bold");
 }}
 '''
 
@@ -300,16 +301,64 @@ def find_bambu_studio() -> Path | None:
     return None
 
 
-def compute_font_size(text: str, default_size: float, max_width: float = 48.0) -> float:
-    char_width_ratio = 0.62
-    needed_width = len(text) * default_size * char_width_ratio
-    if needed_width <= max_width:
-        return default_size
-    scaled = default_size * (max_width / needed_width)
-    if scaled < 4.0:
-        print(f"  Warning: '{text}' may not fit even at minimum font size")
-        return 4.0
-    return round(scaled, 1)
+TEXT_AREA_X_MIN = 48.5  # 46.5mm text area start + 2mm padding
+TEXT_AREA_X_MAX = 95.0  # 100mm swatch - 3mm corner radius - 2mm padding
+
+
+def scale_text_mesh(
+    verts: list[tuple[float, float, float]],
+    tris: list[tuple[int, int, int]],
+) -> list[tuple[float, float, float]]:
+    """Scale each text line independently to fit within the text area.
+
+    Lines are identified by Y coordinate (producer ~28, type ~18, color ~8).
+    Each line scales uniformly only if it overflows, anchored vertically:
+      - producer: top-aligned (top edge stays put)
+      - type: center-aligned
+      - color: bottom-aligned (bottom edge stays put)
+    """
+    if not verts:
+        return verts
+
+    result = list(verts)
+    target_width = TEXT_AREA_X_MAX - TEXT_AREA_X_MIN
+
+    # (y_lo, y_hi, vertical anchor mode)
+    lines = [
+        (23, 999, "top"),      # producer at y≈28
+        (13, 23,  "center"),   # type at y≈18
+        (-999, 13, "bottom"),  # color at y≈8
+    ]
+
+    for y_lo, y_hi, anchor in lines:
+        indices = [i for i, (_, y, _) in enumerate(verts) if y_lo <= y <= y_hi]
+        if not indices:
+            continue
+
+        line_max_x = max(verts[i][0] for i in indices)
+        if line_max_x <= TEXT_AREA_X_MAX:
+            continue
+
+        actual_width = line_max_x - TEXT_AREA_X_MIN
+        s = target_width / actual_width
+
+        ys = [verts[i][1] for i in indices]
+        if anchor == "top":
+            ay = max(ys)
+        elif anchor == "bottom":
+            ay = min(ys)
+        else:
+            ay = (min(ys) + max(ys)) / 2
+
+        for i in indices:
+            x, y, z = verts[i]
+            result[i] = (
+                TEXT_AREA_X_MIN + (x - TEXT_AREA_X_MIN) * s,
+                ay + (y - ay) * s,
+                z,
+            )
+
+    return result
 
 
 def escape_scad(text: str) -> str:
@@ -318,12 +367,8 @@ def escape_scad(text: str) -> str:
 
 def generate_text_scad(producer: str, filament_type: str, color: str) -> str:
     return _text_scad(
-        escape_scad(producer),
-        escape_scad(filament_type),
-        escape_scad(color),
-        compute_font_size(producer, 6),
-        compute_font_size(filament_type, 7),
-        compute_font_size(color, 6),
+        escape_scad(producer), escape_scad(filament_type), escape_scad(color),
+        6, 7, 6,
     )
 
 
@@ -470,6 +515,7 @@ def build_3mf(
     for i, sw in enumerate(swatches):
         body_verts, body_tris = read_stl(sw["body_stl"])
         text_verts, text_tris = read_stl(sw["text_stl"])
+        text_verts = scale_text_mesh(text_verts, text_tris)
 
         body_id = next_id
         body_uuid = make_uuid()
